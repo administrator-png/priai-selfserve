@@ -37,5 +37,6 @@ This project now auto-deploys via Netlify:
 - **Trigger:** any push to the `main` branch of [`administrator-png/priai-selfserve`](https://github.com/administrator-png/priai-selfserve)
 - **Build command:** `npm run build`
 - **Publish directory:** `.next`
+- **GitHub integration:** Netlify GitHub app installed; deploys connect directly via Git provider.
 
 You can still reference the [Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying) if you need details about different hosting providers, but Netlify handles the current production pipeline end-to-end.
