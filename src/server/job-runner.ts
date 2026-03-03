@@ -1,9 +1,10 @@
 "use server";
 
 import { spawn } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, createWriteStream } from "fs";
 import fs from "fs/promises";
 import path from "path";
+import { createClient } from "@supabase/supabase-js";
 import type { JobRecord } from "@/lib/types";
 import { runtimeOptions, voiceOptions } from "@/lib/options";
 import { createJob, getJob, pushLog, setStatus, updateJob } from "./job-store";
@@ -22,15 +23,32 @@ const resolveWorkspaceRoot = () => {
 };
 
 const WORKSPACE_ROOT = resolveWorkspaceRoot();
-const REMOTION_DIR = path.join(WORKSPACE_ROOT, "output", "priai-design-video");
+const OUTPUT_PARENT_DIR = path.join(WORKSPACE_ROOT, "output");
+const REMOTION_DIR = path.join(OUTPUT_PARENT_DIR, "priai-design-video");
 const BRAND_FILE = path.join(REMOTION_DIR, "src", "priai-brand.json");
 const OUTPUT_DIR = path.join(REMOTION_DIR, "out");
 const REQUESTS_DIR = path.join(WORKSPACE_ROOT, "requests");
+const CACHE_DIR = path.join(WORKSPACE_ROOT, ".tmp");
 
-const ensureRemotionProject = () => {
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_REMOTION_BUCKET = process.env.SUPABASE_REMOTION_BUCKET ?? "remotion";
+const SUPABASE_REMOTION_OBJECT = process.env.SUPABASE_REMOTION_OBJECT ?? "priai-design-video.tar.gz";
+const SUPABASE_REMOTION_MANIFEST = `${SUPABASE_REMOTION_OBJECT}.manifest.json`;
+
+let remotionFetchPromise: Promise<void> | null = null;
+
+const ensureRemotionProject = async () => {
+  if (existsSync(REMOTION_DIR)) return;
+  if (!remotionFetchPromise) {
+    remotionFetchPromise = downloadRemotionBundle().finally(() => {
+      remotionFetchPromise = null;
+    });
+  }
+  await remotionFetchPromise;
   if (!existsSync(REMOTION_DIR)) {
     throw new Error(
-      `PriAi Remotion project missing at ${REMOTION_DIR}. Set PRIAI_WORKSPACE_ROOT or include output/priai-design-video in the deployment artifact.`,
+      `PriAi Remotion project missing at ${REMOTION_DIR}. Set PRIAI_WORKSPACE_ROOT or configure Supabase bundle access.`,
     );
   }
 };
@@ -91,9 +109,46 @@ const VOICE_FILE_MAP: Record<string, string> = Object.fromEntries(
 );
 
 async function ensureDirs() {
-  ensureRemotionProject();
+  await ensureRemotionProject();
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
   await fs.mkdir(REQUESTS_DIR, { recursive: true });
+}
+
+async function downloadRemotionBundle() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+  }
+  await fs.mkdir(CACHE_DIR, { recursive: true });
+  await fs.mkdir(OUTPUT_PARENT_DIR, { recursive: true });
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const manifestRes = await supabase.storage.from(SUPABASE_REMOTION_BUCKET).download(SUPABASE_REMOTION_MANIFEST);
+  if (manifestRes.error) {
+    throw new Error(`Failed to download manifest: ${manifestRes.error.message}`);
+  }
+  const manifestBuffer = await manifestRes.data.arrayBuffer();
+  const manifest = JSON.parse(Buffer.from(manifestBuffer).toString("utf-8")) as {
+    version: number;
+    archiveSize: number;
+    parts: { key: string; size: number }[];
+  };
+
+  const tmpArchive = path.join(CACHE_DIR, "priai-design-video.tar.gz");
+  const writeStream = createWriteStream(tmpArchive);
+
+  for (const part of manifest.parts) {
+    const partRes = await supabase.storage.from(SUPABASE_REMOTION_BUCKET).download(part.key);
+    if (partRes.error) {
+      throw new Error(`Failed to download ${part.key}: ${partRes.error.message}`);
+    }
+    const buffer = Buffer.from(await partRes.data.arrayBuffer());
+    writeStream.write(buffer);
+  }
+  await new Promise((resolve) => writeStream.end(resolve));
+
+  await fs.rm(REMOTION_DIR, { recursive: true, force: true });
+  await runCommand("tar", ["-xzf", tmpArchive, "-C", OUTPUT_PARENT_DIR], { cwd: WORKSPACE_ROOT });
+  await fs.rm(tmpArchive, { force: true });
 }
 
 const runCommand = (command: string, args: string[], opts: { cwd: string; env?: NodeJS.ProcessEnv }, onChunk?: (chunk: string) => void) =>

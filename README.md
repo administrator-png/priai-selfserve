@@ -38,5 +38,6 @@ This project now auto-deploys via Netlify:
 - **Build command:** `npm run build`
 - **Publish directory:** `.next`
 - **GitHub integration:** Netlify GitHub app installed; deploys connect directly via Git provider.
+- **Remotion assets:** Stored in Supabase bucket `remotion` as `priai-design-video.tar.gz` parts + manifest. `npm run upload:remotion` refreshes the bundle.
 
 You can still reference the [Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying) if you need details about different hosting providers, but Netlify handles the current production pipeline end-to-end.
