@@ -10,16 +10,15 @@ import { runtimeOptions, voiceOptions } from "@/lib/options";
 import { createJob, getJob, pushLog, setStatus, updateJob } from "./job-store";
 
 const resolveWorkspaceRoot = () => {
-  const envRoot = process.env.PRIAI_WORKSPACE_ROOT ? path.resolve(process.env.PRIAI_WORKSPACE_ROOT) : null;
-  const candidates = [envRoot, process.cwd(), path.resolve(process.cwd(), ".."), path.resolve(process.cwd(), "../..")].filter(
-    (dir): dir is string => Boolean(dir),
-  );
+  const defaultRoot = "/tmp/priai-workspace";
+  const envRoot = process.env.PRIAI_WORKSPACE_ROOT ? path.resolve(process.env.PRIAI_WORKSPACE_ROOT) : defaultRoot;
+  const candidates = [envRoot, process.cwd(), path.resolve(process.cwd(), ".."), path.resolve(process.cwd(), "../..")];
   for (const dir of candidates) {
-    if (existsSync(path.join(dir, "output", "priai-design-video"))) {
+    if (dir && existsSync(path.join(dir, "output", "priai-design-video"))) {
       return dir;
     }
   }
-  return candidates[0] ?? process.cwd();
+  return envRoot ?? process.cwd();
 };
 
 const WORKSPACE_ROOT = resolveWorkspaceRoot();
@@ -28,7 +27,7 @@ const REMOTION_DIR = path.join(OUTPUT_PARENT_DIR, "priai-design-video");
 const BRAND_FILE = path.join(REMOTION_DIR, "src", "priai-brand.json");
 const OUTPUT_DIR = path.join(REMOTION_DIR, "out");
 const REQUESTS_DIR = path.join(WORKSPACE_ROOT, "requests");
-const CACHE_DIR = path.join(WORKSPACE_ROOT, ".tmp");
+const CACHE_DIR = path.join(WORKSPACE_ROOT, ".cache");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -118,6 +117,7 @@ async function downloadRemotionBundle() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
   }
+  await fs.mkdir(WORKSPACE_ROOT, { recursive: true });
   await fs.mkdir(CACHE_DIR, { recursive: true });
   await fs.mkdir(OUTPUT_PARENT_DIR, { recursive: true });
 
