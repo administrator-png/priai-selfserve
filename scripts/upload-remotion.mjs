@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { promises as fsp } from "fs";
 import dotenv from "dotenv";
-import tar from "tar";
+import * as tar from "tar";
 import { createClient } from "@supabase/supabase-js";
 
 const __filename = fileURLToPath(import.meta.url);
