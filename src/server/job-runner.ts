@@ -90,6 +90,7 @@ type BrandFile = {
   description: string;
   logoUrl?: string;
   faviconUrl?: string;
+  websiteUrl?: string;
   primaryColors: string[];
   ctaText: string;
   assets?: { logo?: string; [key: string]: string | undefined };
@@ -285,6 +286,7 @@ async function refreshBrandPayload(
   brand.headline = summary?.headline ?? derivedTagline ?? brand.headline;
   brand.description = derivedDescription;
   brand.ctaText = payload.ctaCopy || summary?.ctaText || brand.ctaText;
+  brand.websiteUrl = payload.websiteUrl || brand.websiteUrl;
 
   if (Array.isArray(summary?.primaryColors) && summary.primaryColors.length) {
     brand.primaryColors = summary.primaryColors.slice(0, 3);
@@ -296,6 +298,15 @@ async function refreshBrandPayload(
       body: derivedDescription,
     }));
   }
+
+  const displayName = brand.brandName || brand.product || 'This team';
+  brand.timeline = [
+    `${displayName} intake brief`,
+    `Scrape ${displayName} style system`,
+    "Auto storyboard & narration",
+    "Render + review loop",
+    "Launch & iterate",
+  ];
 
   if (summary?.logoUrl) {
     const asset = await downloadLogoAsset(summary.logoUrl, jobId);
