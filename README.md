@@ -1,43 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PriAi Motion Spot (Local Workflow)
 
-## Getting Started
+The self-serve Netlify deployment has been retired. This repo now targets a local-only
+pipeline so we can render PriAi motion spots on Sailesh's workstation without
+serverless limits.
 
-First, run the development server:
+## Prerequisites
+
+- macOS with Node.js 22 (already installed on the Mac mini)
+- `.env` at the workspace root (`/Users/home/.openclaw/workspace/.env`) with:
+  - `FIRECRAWL_API_KEY`
+  - `ELEVENLABS_API_KEY`
+  - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_REMOTION_BUCKET`, `SUPABASE_REMOTION_OBJECT`
+- Remotion bundle synced to `../output/priai-design-video` (run `npm run upload:remotion`
+  if you need to refresh from Supabase)
+
+## Run the local app
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd /Users/home/.openclaw/workspace/priai-selfserve
+npm install        # one-time
+npm run dev        # serves the UI + API on http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Leave the `npm run dev` process running. It hosts both the React front-end _and_
+the `/api` endpoints that drive the Remotion pipeline.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Submit a render job
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+You can use either the UI (http://localhost:3000) or a curl command:
 
-## Learn More
+```bash
+curl -X POST http://localhost:3000/api/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "Narrate the StreetCloud site for a consulting partner.",
+    "websiteUrl": "https://streetcloud.net",
+    "outputFormat": "16:9",
+    "runtime": "60s",
+    "voiceId": "aurora",
+    "ctaCopy": "Book a live PriAi Design working session at priai.ai/demo"
+  }'
+```
 
-To learn more about Next.js, take a look at the following resources:
+The job runner logs to the UI (“Production log” accordion) and saves the rendered
+MP4 to `../output/priai-design-video/out/<job-id>.mp4`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Refresh the Remotion bundle
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+If you update the Remotion project under `../output/priai-design-video`, run:
 
-## Deploys
+```bash
+npm run upload:remotion   # optional – pushes bundle to Supabase backup
+```
 
-This project now auto-deploys via Netlify:
+If you want to re-fetch from Supabase instead, delete the local folder and run the
+app once; the server will download the archive automatically.
 
-- **Production URL:** https://selfserve.priai.ai
-- **Trigger:** any push to the `main` branch of [`administrator-png/priai-selfserve`](https://github.com/administrator-png/priai-selfserve)
-- **Build command:** `npm run build`
-- **Publish directory:** `.next`
-- **GitHub integration:** Netlify GitHub app installed; deploys connect directly via Git provider.
-- **Remotion assets:** Stored in Supabase bucket `remotion` as `priai-design-video.tar.gz` parts + manifest. `npm run upload:remotion` refreshes the bundle.
+## Notes
 
-You can still reference the [Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying) if you need details about different hosting providers, but Netlify handles the current production pipeline end-to-end.
+- Firecrawl scraping + ElevenLabs synthesis run locally via the keys in `.env`.
+- There is no Netlify deployment anymore; all requests go through the local `npm run dev`
+  process (reachable from OpenClaw/Telegram via tunnel if needed).
+- The `/api/jobs` endpoint uses the in-memory job store, so keep the dev process
+  running until each render finishes.
