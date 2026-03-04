@@ -18,6 +18,7 @@ const REQUESTS_DIR = path.join(WORKSPACE_ROOT, "requests");
 const CACHE_DIR = path.join(WORKSPACE_ROOT, ".cache");
 const LOGO_ASSET_DIR = path.join(REMOTION_DIR, "public", "images", "brands");
 const NARRATION_OUTPUT = path.join(REMOTION_DIR, "public", "audio", "priai-narration.mp3");
+const BUNDLE_META_PATH = path.join(OUTPUT_PARENT_DIR, ".priai-remotion-manifest.json");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -80,6 +81,12 @@ type FirecrawlResponse = {
     extract?: FirecrawlExtract;
     markdown?: string;
   };
+};
+
+type RemotionManifest = {
+  version: number;
+  archiveSize: number;
+  parts: { key: string; size: number }[];
 };
 
 type BrandFile = {
@@ -352,12 +359,24 @@ async function ensureDirs() {
 }
 
 async function ensureRemotionProject() {
-  if (existsSync(REMOTION_DIR)) return;
+  const remoteManifest = await fetchRemotionManifest();
+  const localManifest = await readLocalManifest();
+  const needsRefresh =
+    !existsSync(REMOTION_DIR) ||
+    !localManifest ||
+    !manifestsMatch(localManifest, remoteManifest);
+
+  if (!needsRefresh) return;
+
   if (!remotionFetchPromise) {
-    remotionFetchPromise = downloadRemotionBundle().finally(() => {
+    remotionFetchPromise = (async () => {
+      await downloadRemotionBundle(remoteManifest);
+      await fs.writeFile(BUNDLE_META_PATH, JSON.stringify(remoteManifest, null, 2));
+    })().finally(() => {
       remotionFetchPromise = null;
     });
   }
+
   await remotionFetchPromise;
   if (!existsSync(REMOTION_DIR)) {
     throw new Error(
@@ -366,7 +385,31 @@ async function ensureRemotionProject() {
   }
 }
 
-async function downloadRemotionBundle() {
+async function fetchRemotionManifest(): Promise<RemotionManifest> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+  }
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const manifestRes = await supabase.storage.from(SUPABASE_REMOTION_BUCKET).download(SUPABASE_REMOTION_MANIFEST);
+  if (manifestRes.error) {
+    throw new Error(`Failed to download manifest: ${manifestRes.error.message}`);
+  }
+  const manifestBuffer = await manifestRes.data.arrayBuffer();
+  return JSON.parse(Buffer.from(manifestBuffer).toString("utf-8")) as RemotionManifest;
+}
+
+async function readLocalManifest(): Promise<RemotionManifest | null> {
+  try {
+    const raw = await fs.readFile(BUNDLE_META_PATH, "utf-8");
+    return JSON.parse(raw) as RemotionManifest;
+  } catch {
+    return null;
+  }
+}
+
+const manifestsMatch = (a: RemotionManifest, b: RemotionManifest) => JSON.stringify(a) === JSON.stringify(b);
+
+async function downloadRemotionBundle(manifest: RemotionManifest) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
   }
@@ -375,17 +418,6 @@ async function downloadRemotionBundle() {
   await fs.mkdir(OUTPUT_PARENT_DIR, { recursive: true });
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-  const manifestRes = await supabase.storage.from(SUPABASE_REMOTION_BUCKET).download(SUPABASE_REMOTION_MANIFEST);
-  if (manifestRes.error) {
-    throw new Error(`Failed to download manifest: ${manifestRes.error.message}`);
-  }
-  const manifestBuffer = await manifestRes.data.arrayBuffer();
-  const manifest = JSON.parse(Buffer.from(manifestBuffer).toString("utf-8")) as {
-    version: number;
-    archiveSize: number;
-    parts: { key: string; size: number }[];
-  };
-
   const tmpArchive = path.join(CACHE_DIR, "priai-design-video.tar.gz");
   const writeStream = createWriteStream(tmpArchive);
 
