@@ -24,6 +24,17 @@ export type ChangeRequest = {
   createdAt: number;
 };
 
+export type JobArtifacts = {
+  script?: string;
+  voiceId?: VoiceOption["id"];
+  brand?: {
+    brandName?: string;
+    tagline?: string;
+    primaryColors?: string[];
+    logoAsset?: string;
+  };
+};
+
 export type JobRecord = {
   id: string;
   createdAt: number;
@@ -32,6 +43,7 @@ export type JobRecord = {
   progress: number; // 0-1
   logs: string[];
   payload: JobPayload;
+  artifacts?: JobArtifacts;
   result?: {
     videoPath: string;
     composition: string;

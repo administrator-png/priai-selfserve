@@ -265,6 +265,23 @@ export default function HomePage() {
                       <div>
                         <p className="text-white font-semibold">{job.payload.outputFormat} · {job.payload.runtime}</p>
                         <p className="text-xs text-slate-300">{new Date(job.createdAt).toLocaleString()}</p>
+                        {job.artifacts?.brand?.brandName && (
+                          <p className="text-xs text-slate-400">
+                            {job.artifacts.brand.brandName}
+                            {job.artifacts.brand.tagline ? ` · ${job.artifacts.brand.tagline}` : ""}
+                          </p>
+                        )}
+                        {job.artifacts?.brand?.primaryColors?.length ? (
+                          <div className="mt-1 flex gap-1">
+                            {job.artifacts.brand.primaryColors.slice(0, 3).map((color) => (
+                              <span
+                                key={color}
+                                className="h-1.5 w-6 rounded-full border border-white/10"
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <span className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide ${statusCopy[job.status].tone}`}>
                         {statusCopy[job.status].label}
@@ -287,7 +304,17 @@ export default function HomePage() {
                         <p className="text-xs text-slate-400">
                           {job.result.composition} · {formatRuntime(job.result.runtimeSeconds)}
                         </p>
+                        {job.artifacts?.voiceId && (
+                          <p className="text-xs text-slate-500">
+                            Voice: {voiceOptions.find((voice) => voice.id === job.artifacts?.voiceId)?.label ?? job.artifacts.voiceId}
+                          </p>
+                        )}
                       </div>
+                    )}
+                    {job.artifacts?.script && (
+                      <p className="text-xs text-slate-200 border border-white/10 bg-black/40 rounded-xl p-3 leading-relaxed">
+                        {job.artifacts.script}
+                      </p>
                     )}
                     {job.status === "failed" && job.error && (
                       <p className="text-sm text-red-300">{job.error}</p>

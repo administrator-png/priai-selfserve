@@ -26,6 +26,7 @@ export const updateJob = (id: string, patch: Partial<JobRecord>) => {
     ...patch,
     logs: patch.logs ?? current.logs,
     changeRequests: patch.changeRequests ?? current.changeRequests,
+    artifacts: patch.artifacts ? { ...current.artifacts, ...patch.artifacts } : current.artifacts,
     updatedAt: Date.now(),
   };
   store.set(id, next);
@@ -42,6 +43,7 @@ export const createJob = (payload: JobPayload) => {
     progress: 0.02,
     logs: ["Job queued"],
     payload,
+    artifacts: { voiceId: payload.voiceId },
     changeRequests: [],
   };
   store.set(id, base);
