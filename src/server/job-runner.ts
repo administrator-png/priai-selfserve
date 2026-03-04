@@ -4,6 +4,7 @@ import { spawn } from "child_process";
 import { existsSync, createWriteStream } from "fs";
 import fs from "fs/promises";
 import path from "path";
+import * as tar from "tar";
 import { createClient } from "@supabase/supabase-js";
 import type { JobRecord } from "@/lib/types";
 import { runtimeOptions, voiceOptions } from "@/lib/options";
@@ -432,7 +433,7 @@ async function downloadRemotionBundle(manifest: RemotionManifest) {
   await new Promise((resolve) => writeStream.end(resolve));
 
   await fs.rm(REMOTION_DIR, { recursive: true, force: true });
-  await runCommand("tar", ["-xzf", tmpArchive, "-C", OUTPUT_PARENT_DIR], { cwd: WORKSPACE_ROOT });
+  await tar.x({ file: tmpArchive, cwd: OUTPUT_PARENT_DIR });
   await fs.rm(tmpArchive, { force: true });
 }
 
